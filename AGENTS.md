@@ -13,6 +13,7 @@
 
 ## 每次会话结束前
 在 `notes/PROGRESS.md` 末尾追加一条记录（格式见该文件），即使只学了一半。阶段验收完成后，勾选 `LEARNING_PLAN.md` 的进度。
+记录里写"已修改某文件"之前，先确认改动真的在文件里（Git 仓库里用 `git diff` / `git status` 看一眼）。曾经出现过日志写了"已改正"、但推送的仓库里并没有这处改动的情况。
 
 ## 目录
 - `LEARNING_PLAN.md`：学习路线与进度勾选
@@ -43,8 +44,8 @@
 - **不要做任何全局安装**（brew、apt、`pip install --user`、`npm -g` 等）。用户刻意保持全局环境干净，需要新工具时先问。
 - 访问 GitHub 不稳定，下载优先走 `env.sh` 里配置的国内镜像。
 - `.tools/`、`my-agent/.venv/`、`references/` 下的源码都不进 Git，每台电脑各自生成或下载。
-- Git 仓库（GitHub 私有仓库）只在实验室电脑上；个人电脑不接 Git，用压缩包手动同步。
-  如果当前目录是 Git 仓库：会话开始先 `git pull`，结束时提醒用户提交并推送。
+- 两台电脑都 clone 了同一个 GitHub 仓库（`YuXingyao000/Agent`），通过 Git 同步。
+  会话开始先 `git pull`，结束时提醒用户提交并推送。推送需要用户自己的 GitHub 凭据，由用户本人操作。
 - API key 放在 `.env` 里（已被 `.gitignore` 排除），绝不写进代码或提交。
 
 ## 参照源码

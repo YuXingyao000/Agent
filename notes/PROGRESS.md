@@ -65,3 +65,16 @@
 - 理解检查：四道题还没写。先让用户复述「一次请求发什么」和「tool 结果为什么带 id」
 - 遗留问题：Git 仓库仍未建；`notes/00-准备.md` 最后一行可能仍空着
 - 下一步：复述通过后，把阶段 1 的四道理解检查写到 `notes/01-tool-calling.md`
+
+### 2026-10-22 · 个人电脑 · Claude Code（复查）
+- 阶段：复查阶段 0 与阶段 1 开头
+- 完成了：
+  - 个人电脑也接上了 Git：本地文件夹关联到 GitHub 仓库 `YuXingyao000/Agent`，以后两台电脑都用 `git pull` / `git push` 同步
+  - 核实上一条记录的说法：mini-swe-agent 默认确实走原生 tool calling，`LEARNING_PLAN.md` 原文写反了。但上一条记录说"已改正"，**推送的仓库里并没有这处改动**。本次已改正，并在 `AGENTS.md` 加了"写日志前先确认改动在文件里"的规则
+  - 勾选阶段 0；在 `notes/00-准备.md` 末尾加了两道追问
+- 理解检查：阶段 0 通过，两道追问待答（workflow/agent 边界、ReAct 怎么让模型停下）
+- 遗留问题：
+  - **GitHub 仓库目前是公开的**（计划里是私有），需要用户在 GitHub 设置里改成 Private
+  - `my-agent` 目录在 Cursor 里"拒绝访问"的根因没查清。把虚拟环境移到 `.tools` 能绕过，但以后 my-agent 要往自己目录里写文件（会话日志、快照）时可能再遇到。在普通 PowerShell 里试着往 `my-agent` 写一个文件：能写，说明是 Cursor 的限制；不能写，用 `icacls my-agent` 看权限
+  - 本次改动需要在个人电脑上提交并推送，实验室那边 `git pull` 即可拿到
+- 下一步：回答两道追问 → 继续阶段 1（复述"一次请求发什么"和"tool 结果为什么带 id"，再写 `notes/01-tool-calling.md`）

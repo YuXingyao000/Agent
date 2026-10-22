@@ -107,9 +107,9 @@ Agent/
 ### 阶段 0：准备
 - [x] 下载 `opencode` 和 `mini-swe-agent` 到 `references/`（源码地图见 `references/README.md`）
 - [x] 配好 Python 环境（uv + Python 3.12，全部在项目内，用法见 `env.sh`）
-- [ ] 申请一个模型 API key
-- [ ] 读：Anthropic《Building effective agents》（2024.12）。这是全任务书的"地图"，先通读一遍，不求全懂
-- [ ] 读：Lilian Weng《LLM Powered Autonomous Agents》（2023），把 ReAct 放进更大的谱系里
+- [x] 申请一个模型 API key（DeepSeek，存在 `.env` 的 `DEEPSEEK_API_KEY`）
+- [x] 读：Anthropic《Building effective agents》（2024.12）。这是全任务书的"地图"，先通读一遍，不求全懂
+- [x] 读：Lilian Weng《LLM Powered Autonomous Agents》（2023），把 ReAct 放进更大的谱系里
 
 **理解检查**
 1. 用一句话分别定义 workflow 和 agent，区别在哪？
@@ -125,14 +125,14 @@ Agent/
 - 不同厂商的格式差异（Anthropic content blocks / OpenAI Responses / Chat Completions），以及 provider 抽象层要抹平什么。
 
 **对照源码**：
-- mini-swe-agent 默认**不用**原生 tool calling，而是解析回复里的 bash 代码块，这是 ReAct 原始做法的现代版。
+- mini-swe-agent 两种做法都有：默认的 `LitellmModel` 走原生 tool calling（只注册一个 bash 工具）；`LitellmTextbasedModel` 则让模型在回复里写 bash 代码块、再用正则解析，这是 ReAct 原始做法的现代版。对比这两个文件，就是对比两代 tool calling。
 - opencode 里找到"把内部消息转换成发给模型的请求"那一层，看它每次请求到底发了什么，以及它怎么同时支持多家厂商。
 
 **动手**：多轮 CLI 对话 + 一个工具，手动完成"请求调用 → 执行 → 回传 → 最终回答"；打印每轮 token 用量；写出 provider 抽象（只实现一家即可）。
 
 **理解检查**
 1. 一个 30 轮的对话，第 30 轮的成本大约是第 1 轮的多少倍？这对 agent 设计意味着什么？
-2. 原生 tool calling 相对文本解析，好处和代价各是什么？mini-swe-agent 为什么故意不用？
+2. 原生 tool calling 相对文本解析，好处和代价各是什么？mini-swe-agent 已经默认用原生 tool calling 了，为什么还要保留 textbased 版本？
 3. 工具报错时，应该抛异常终止，还是把错误作为结果回传给模型？
 4. 模型一次请求并行调用 3 个工具，其中 1 个失败了，你回传什么？
 
@@ -463,7 +463,7 @@ Agent/
 ## 七、进度
 
 **第一部分：基础速通**
-- [ ] 0 准备
+- [x] 0 准备
 - [ ] 1 LLM API 与 Tool Calling
 - [ ] 2 Agent Loop
 - [ ] 3 工具设计（ACI）
