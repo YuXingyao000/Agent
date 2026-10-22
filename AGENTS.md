@@ -46,7 +46,10 @@
 - `.tools/`、`my-agent/.venv/`、`references/` 下的源码都不进 Git，每台电脑各自生成或下载。
 - 两台电脑都 clone 了同一个 GitHub 仓库（`YuXingyao000/Agent`），通过 Git 同步。
   会话开始先 `git pull`，结束时提醒用户提交并推送。推送需要用户自己的 GitHub 凭据，由用户本人操作。
-- API key 放在 `.env` 里（已被 `.gitignore` 排除），绝不写进代码或提交。
+- **仓库是公开的**（用户有意为之：换设备时不用配置凭据就能 clone）。所以提交的一切都对外可见：
+  - API key 放在 `.env` 里（已被 `.gitignore` 排除），绝不写进代码、笔记或提交
+  - 不要提交 token、密码、私人信息，也不要提交实验室的工作内容
+  - 提交前看一眼 `git diff`，确认没有夹带这些东西
 
 ## 参照源码
 - `references/` 只读，不要修改。
