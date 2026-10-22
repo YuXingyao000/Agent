@@ -78,3 +78,16 @@
   - `my-agent` 目录在 Cursor 里"拒绝访问"的根因没查清。把虚拟环境移到 `.tools` 能绕过，但以后 my-agent 要往自己目录里写文件（会话日志、快照）时可能再遇到。在普通 PowerShell 里试着往 `my-agent` 写一个文件：能写，说明是 Cursor 的限制；不能写，用 `icacls my-agent` 看权限
   - 本次改动需要在个人电脑上提交并推送，实验室那边 `git pull` 即可拿到
 - 下一步：回答两道追问 → 继续阶段 1（复述"一次请求发什么"和"tool 结果为什么带 id"，再写 `notes/01-tool-calling.md`）
+
+### 2026-10-22 · 个人电脑 · Claude Code
+- 阶段：0 追问 → 准备进阶段 1
+- 完成了：
+  - `.env` 格式修正：变量名原为 `DEEPSEEK`、`=` 两边有空格，改为 `DEEPSEEK_API_KEY=...`。实测请求 DeepSeek 成功（请求 `deepseek-chat`，响应里的 model 是 `deepseek-flash`，说明是别名）
+  - 追问 1 答对（判为 workflow：步骤和停止条件都由程序写死）
+  - 追问 2 用户没看懂题目。用实验演示：不加 stop 时，模型会在 `Action:` 后面自己编一个 `Observation: 22°C` 并直接给出答案；加 `stop=["Observation:"]` 后，输出停在 Action 那一行
+- 理解检查：追问 2 通过（直接讲解 + 跑了完整的两轮 ReAct 循环演示后作答）。答案漏了"靠 stop 参数让服务器截断"这一点，已口头指出
+- 教学方式：用户反感用连串引导问题打哑谜，已写进 `AGENTS.md`：没看懂题目时直接讲清机制再出题
+- 遗留问题：演示脚本在临时目录，没有进仓库，阶段 1 在 my-agent 里正式实现
+- 阶段 1 开讲"模型无状态"：实验 A（不带历史，模型不记得暗号）、实验 B（8 轮对话，输入 token 32→429，DeepSeek 前缀缓存以 128 token 为单位命中）；对照 mini-swe-agent `agents/default.py:149` 每步把整个 `self.messages` 发出去
+- 阶段 1 理解检查第 1 题：通过（修正后）。倍数写成"n(n-1)/2 与 1:1"，已纠正为单轮约 30 倍、累计约 465 倍；想到了"工具输出污染上下文、稀释注意力"，很好。对照了截断的真实实现：mini-swe-agent `config/default.yaml` 超过 1 万字符时保留头尾各 5000；opencode `tool-output.ts` 超过 2000 行 / 50KB 时截断，全文存盘并告诉模型路径
+- 下一步（已更新）：讲工具定义（名字 + 描述 + JSON Schema）与 tool_call id，再答第 2–4 题。原计划：复述"一次请求发什么"、"tool 结果为什么带 id"，再写 `notes/01-tool-calling.md`
