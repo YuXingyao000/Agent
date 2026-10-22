@@ -1,0 +1,19 @@
+# 每台电脑各自生成的环境
+.tools/
+.venv/
+__pycache__/
+*.pyc
+
+# 参照源码体积大，不进仓库；按 references/README.md 的固定版本下载
+references/*/
+
+# 密钥：API key 放在 .env 里，绝不提交
+.env
+.env.*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 打包导出的压缩包
+_export/
