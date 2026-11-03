@@ -1,6 +1,7 @@
 # 每台电脑各自生成的环境
 .tools/
 .venv/
+node_modules/
 __pycache__/
 *.pyc
 

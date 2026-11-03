@@ -4,9 +4,10 @@
 #
 # 会做的事：
 #   1. 从 PyPI 镜像下载 uv 到 .tools\bin（校验 sha256）
-#   2. 用 uv 从国内镜像下载 Python 3.12 到 .tools\python
-#   3. 为 my-agent 建虚拟环境
-#   4. 下载固定版本的参照源码到 references\（GitHub 下不动时，按提示手动下载）
+#   2. 用 uv 从国内镜像下载 Python 3.12 到 .tools\python（只用于临时实验）
+#   3. 从 npmmirror 下载 Node.js 到 .tools\node（校验 sha256），主语言 TypeScript 靠它运行
+#   4. 在项目根目录 npm 安装 TypeScript 等开发依赖（node_modules\）
+#   5. 下载固定版本的参照源码到 references\（GitHub 下不动时，按提示手动下载）
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"   # 关掉进度条，Invoke-WebRequest 会快很多
@@ -17,6 +18,7 @@ $Root = $PSScriptRoot
 
 $UvVersion = "0.13.1"
 $PythonVersion = "3.12"
+$NodeVersion = "v24.22.1"
 $Downloads = "$Root\.tools\downloads"
 $References = @(
     @{ Name = "mini-swe-agent"; Url = "https://github.com/SWE-agent/mini-swe-agent/archive/04d809ceab9df28f9adaed044884180159172930.zip" },
@@ -30,7 +32,7 @@ if ($Root.Length -gt 40) {
 }
 
 # ---------- 1. uv ----------
-Write-Host "`n[1/4] uv" -ForegroundColor Cyan
+Write-Host "`n[1/5] uv" -ForegroundColor Cyan
 if (Test-Path "$Root\.tools\bin\uv.exe") {
     Write-Host "  已存在，跳过"
 } else {
@@ -76,23 +78,51 @@ if (Test-Path "$Root\.tools\bin\uv.exe") {
 & uv --version
 
 # ---------- 2. Python ----------
-Write-Host "`n[2/4] Python $PythonVersion" -ForegroundColor Cyan
+Write-Host "`n[2/5] Python $PythonVersion" -ForegroundColor Cyan
 & uv python install $PythonVersion --no-registry
 if ($LASTEXITCODE -ne 0) { throw "Python 安装失败" }
 
-# ---------- 3. my-agent 虚拟环境 ----------
-Write-Host "`n[3/4] my-agent 虚拟环境" -ForegroundColor Cyan
-Push-Location "$Root\my-agent"
+# ---------- 3. Node.js ----------
+Write-Host "`n[3/5] Node.js $NodeVersion" -ForegroundColor Cyan
+if (Test-Path "$Root\.tools\node\node.exe") {
+    Write-Host "  已存在，跳过"
+} else {
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "win-arm64" } else { "win-x64" }
+    $name = "node-$NodeVersion-$arch"
+    $base = "https://registry.npmmirror.com/-/binary/node/$NodeVersion"
+    $zip = "$Downloads\$name.zip"
+    Write-Host "  下载 $name.zip ..."
+    Invoke-WebRequest -UseBasicParsing "$base/$name.zip" -OutFile $zip
+
+    $sums = Invoke-WebRequest -UseBasicParsing "$base/SHASUMS256.txt"
+    $text = if ($sums.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($sums.Content) } else { $sums.Content }
+    $expected = [regex]::Match($text, "([0-9a-f]{64})\s+$([regex]::Escape("$name.zip"))").Groups[1].Value
+    $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+    if (-not $expected -or $actual -ne $expected) { throw "Node sha256 校验失败" }
+    Write-Host "  sha256 校验通过"
+
+    # Windows 自带的 tar 解压 zip 比 Expand-Archive 快得多（npm 有上千个小文件）
+    & tar -xf $zip -C $Downloads
+    if ($LASTEXITCODE -ne 0) { throw "Node 解压失败" }
+    Move-Item "$Downloads\$name" "$Root\.tools\node"
+    Remove-Item -Force $zip
+}
+& node --version
+
+# ---------- 4. npm 依赖 ----------
+Write-Host "`n[4/5] npm 依赖（TypeScript 等）" -ForegroundColor Cyan
+Push-Location $Root
 try {
-    & uv sync
-    if ($LASTEXITCODE -ne 0) { throw "uv sync 失败" }
-    & uv run python -c "import sys; print('  ', sys.version); print('  ', sys.executable)"
+    # 有 package-lock.json 时用 npm ci，严格按锁文件安装，两台电脑装出来完全一样
+    if (Test-Path "$Root\package-lock.json") { & npm ci } else { & npm install }
+    if ($LASTEXITCODE -ne 0) { throw "npm 安装失败" }
+    & npx tsc --version
 } finally {
     Pop-Location
 }
 
-# ---------- 4. 参照源码 ----------
-Write-Host "`n[4/4] 参照源码" -ForegroundColor Cyan
+# ---------- 5. 参照源码 ----------
+Write-Host "`n[5/5] 参照源码" -ForegroundColor Cyan
 $missing = @()
 foreach ($ref in $References) {
     $target = "$Root\references\$($ref.Name)"
