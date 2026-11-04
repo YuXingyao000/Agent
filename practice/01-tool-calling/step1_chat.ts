@@ -36,7 +36,7 @@ const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
     method: "POST",
     headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${key}x`,
+        "Authorization": `Bearer ${key}`,
     },
     body: JSON.stringify(requestBody),
     signal: AbortSignal.timeout(120_000),

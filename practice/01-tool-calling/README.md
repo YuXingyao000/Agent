@@ -119,3 +119,125 @@
 1. 聊 5 轮以上，观察 `prompt_tokens` 每一轮怎么增长，`prompt_cache_hit_tokens` 什么时候开始不为 0。
 2. 第 1 轮告诉它你的名字，第 3 轮问它"我叫什么"。然后把"把模型的回答放回历史"那一行注释掉，重新聊一次，看看会出现什么奇怪的现象。
 3. 在 `messages` 的最前面加一条 `role: "system"` 的消息，写上当前的日期和时间（用 `new Date().toLocaleString("zh-CN")`），然后问它"今天几号？"。和作业 1 里它以为的 5 月 7 日对比一下。
+
+---
+
+## 作业 3：用 prompt + 正则手写工具调用（ReAct 时代）
+
+**场景**：2022 年底到 2023 年上半年，模型 API 只会输出文字。想让模型"查天气"，只能在 prompt 里跟它约定一个格式，再用正则表达式把"调用"从它的文字里抠出来。最早的 SWE-agent 和 mini-swe-agent 1.0 都是这么做的，见 `references/mini-swe-agent/src/minisweagent/models/utils/actions_text.py` 文件开头的注释。
+
+**文件**：`practice/01-tool-calling/step3_react.ts`，从 `step2_chat.ts` 复制一份开始改。
+
+**要做的东西**
+
+1. 一个假的天气工具：`function getWeather(city: string): string`。用一个 `Record<string, string>` 查表（比如北京是"晴，12°C"，上海是"小雨，18°C"），查不到时返回"没有这个城市的数据"。
+2. 在 system 消息里写清约定。可以参考下面这段，自己改：
+   ```
+   你可以使用一个工具：get_weather，用来查询某个城市现在的天气。
+   需要用工具时，只输出下面这一行，然后停下：
+   Action: get_weather[城市名]
+   我会把结果以 "Observation: ..." 的形式发给你。
+   信息足够之后，用下面这种格式给出最终回答：
+   Final Answer: ...
+   ```
+3. 在每个用户问题里面，再套一层循环。**这就是 agent loop 的雏形**：
+   ```
+   外层循环：读取用户输入
+     内层循环（最多 5 步）：
+       发请求，拿到回复文本
+       包含 Final Answer → 打印，跳出内层循环
+       包含 Action → 执行工具 → 把模型的回复和 "Observation: 结果" 都放进历史 → 继续下一步
+       两样都没有 → ？（见实验 3）
+   ```
+4. 在请求体里加上 `stop: ["Observation:"]`。
+
+**语法和 API 细节**
+
+- 正则匹配：`const m = text.match(/Action:\s*get_weather\[(.+?)\]/);`。没匹配到时返回 `null`，匹配到了，`m[1]` 就是括号里捕获的城市名。`/.../` 是 JS 的正则字面量，`\[` 是转义后的方括号，`(.+?)` 是非贪婪的捕获组。相当于 Python 的 `re.search`。
+- 判断和截取：`text.includes("Final Answer:")`，以及 `text.split("Final Answer:")[1].trim()`。
+- 工具结果用 **`role: "user"`** 发回去。文本时代既没有 `tool` 这个角色，也没有 id，mini-swe-agent 也是这么做的（`actions_text.py` 第 56–58 行）。
+- 计数循环：`for (let step = 0; step < 5; step++) { ... }`。
+
+**容易踩的坑**
+
+- 设置了 `stop` 之后，返回的文本**不包含** "Observation:" 这几个字本身，服务器在生成到它之前就截断了。
+- 思考模型的推理过程在 `reasoning_content` 里，`content` 里可能只有一行 Action。这是正常的。
+- 模型不一定按格式写。它可能写成 `get_weather("北京")`，也可能在同一次回复里既写了 Action 又写了 Final Answer。
+
+**做完再做四个小实验**
+
+1. 去掉 `stop`，问天气，看看 `content` 里会不会出现模型自己编的 Observation（阶段 0 见过一次）。
+2. 问"北京和上海，哪个现在是晴天？"（假工具只返回天气状况、没有气温，所以不要问哪个更暖和）。这需要调用两次工具，看看模型是怎么做的：一次查一个？还是一次写两行 Action？你的正则能处理吗？
+3. 模型的回复既没有 Action，也没有 Final Answer，或者格式写错了，该怎么办？对照 mini-swe-agent 的做法（`actions_text.py` 第 24–31 行：发回一条 user 消息，告诉模型格式不对，让它重写），自己实现一下。
+4. 问一个查不到的城市，比如"火星"。工具返回"没有这个城市的数据"，模型会怎么处理？
+
+---
+
+## 作业 4：原生 tool calling（2023.06 之后）
+
+**场景**：2023 年 6 月，OpenAI 把调用格式训练进了模型，API 直接返回结构化的调用；11 月又支持了一次并行调用多个工具，并用 id 来配对结果。作业 3 里每一个让你头疼的地方，在这一步都有了专门的字段来解决。
+
+**文件**：`practice/01-tool-calling/step4_tools.ts`，从 `step3_chat.ts` 复制一份开始改。
+
+**和作业 3 相比，要改的地方**
+
+| 环节 | 作业 3 | 作业 4 |
+|---|---|---|
+| 告诉模型有哪些工具 | system 消息里的一段文字 | 请求体里的 `tools` 参数。system 消息只保留身份和时间，删掉格式约定 |
+| 模型发起调用 | `content` 里的 `Action:` 那一行，靠正则抠出来 | `message.tool_calls` 数组，`finish_reason` 是 `"tool_calls"` |
+| 结果发回去 | `role: "user"` + `Observation: ...` | `role: "tool"` + `tool_call_id` |
+| 结束 | 显式的 `Final Answer:` | 隐式的：没有 `tool_calls`，就是最终回答 |
+| `stop` | 必须有 | 删掉，用不着了 |
+
+**API 细节**
+
+- 请求体里的工具定义，格式和阶段 1 开头那个实验一样：
+  ```json
+  "tools": [{
+    "type": "function",
+    "function": {
+      "name": "get_weather",
+      "description": "查询某个城市现在的天气。一次只能查一个城市。",
+      "parameters": {
+        "type": "object",
+        "properties": { "city": { "type": "string", "description": "城市名，中文，不带“市”字" } },
+        "required": ["city"]
+      }
+    }
+  }]
+  ```
+- 响应里的一次调用长这样：`{ "id": "call_00_...", "type": "function", "function": { "name": "get_weather", "arguments": "{\"city\": \"北京\"}" } }`。**`arguments` 是一个 JSON 字符串**，要先用 `JSON.parse` 解析。
+- 有 `tool_calls` 的时候，`content` 可能是 `null`，也可能是一段文字。
+
+**要写的循环**
+
+```
+内层循环的每一步：
+  发请求，把回复（整个 message，包括 tool_calls）push 进历史
+  如果 tool_calls 不为空：
+    对每一个调用：JSON.parse 参数 → 执行工具 → push { role: "tool", tool_call_id: 调用的 id, content: 结果 }
+    continue
+  否则：return content
+```
+
+**类型**
+
+- `Message` 要扩展：`role` 多了 `"tool"`；`content` 变成 `string | null`；加上可选的 `tool_calls?: ToolCall[]` 和 `tool_call_id?: string`。
+- 再定义一个 `ToolCall` interface：`id`、`type`、`function: { name; arguments }`。
+- 进阶（可选）：把 `Message` 改成 bootcamp 第 6 节那样的可辨识联合类型。按 `role` 区分之后，TS 就能保证 tool 消息一定有 `tool_call_id`。
+
+**容易踩的坑**（前两个你都已经见过 400 了）
+
+- 带 `tool_calls` 的那条 assistant 消息，**必须放在 tool 消息之前**进入历史，否则返回 400：`Messages with role 'tool' must be a response to a preceding message with 'tool_calls'`。
+- **每一个**调用都要有对应的结果，少一个也会返回 400。
+- `content` 是 `null` 时，直接对它调用字符串方法会报错。把类型写成 `string | null`，TS 会逼你先处理这种情况。
+- `JSON.parse` 遇到不合法的 JSON 会抛异常。这时候应该怎么办？先让它直接抛出去，答第 3、4 题时再想。
+
+**做完再做四个小实验**
+
+1. 问"北京和上海，哪个现在是晴天？"。模型会不会在**一次回复**里同时发起两个调用？一共用了几步？和作业 3 的 3 步对比一下。
+2. 把每个 `tool_calls` 原样打印出来，看看 id 长什么样，`arguments` 是什么类型。
+3. 让工具变慢：把 `getWeather` 改成 `async`，在里面 `await` 一个 1 秒的 sleep。分别用 `for` 循环一个一个执行、用 `Promise.all` 一起执行，比较一下总耗时。
+4. 工具调用这一轮里，`reasoning_content` 有没有被算进输入？作业 2 发现，在普通的多轮对话里，它会被忽略。在同一轮的工具调用之间，情况还一样吗？对比相邻两步的 `prompt_tokens` 和上一步的 `reasoning_tokens`。
+
+做完作业 4，回答 `LEARNING_PLAN.md` 里阶段 1 的理解检查第 2–4 题，写进 `notes/01-tool-calling.md`。
